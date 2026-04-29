@@ -1,0 +1,85 @@
+// === PENGATURAN MESIN ===
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ... (kode model User dan tabel lainnya di bawahnya biarkan sama persis)
+// === TABEL 1: USERS (Akses Admin) ===
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password     String
+  nama_lengkap String
+  role         String   @default("ADMIN")
+  createdAt    DateTime @default(now())
+
+  @@map("users") // Nama tabel di database nanti jadi "users" huruf kecil
+}
+
+// === TABEL 2: PENGATURAN WEB (Landing Page) ===
+model PengaturanWeb {
+  id             Int      @id @default(1)
+  nama_instansi  String
+  alamat_lengkap String
+  email_kontak   String
+  no_telepon     String
+  stat_populasi  String
+  stat_wilayah   String
+  stat_fasilitas String
+
+  @@map("pengaturan_web")
+}
+
+// === TABEL 3: WILAYAH (Peta Poligon) ===
+model Wilayah {
+  id              Int     @id @default(autoincrement())
+  nama_wilayah    String
+  level           String  // Isi nanti: KABUPATEN atau KECAMATAN
+  parent_id       Int?    // Tanda "?" berarti boleh kosong (Null)
+  geojson_polygon Json?   // Tipe data JSON super penting untuk poligon Peta
+  warna_area      String?
+
+  // Relasi ke tabel bawahnya
+  populasi        Populasi[]
+  fasilitas       Fasilitas[]
+
+  @@map("wilayah")
+}
+
+// === TABEL 4: POPULASI (Statistik) ===
+model Populasi {
+  id          String  @id @default(uuid())
+  wilayah_id  Int
+  tahun       Int
+  jml_sapi    Int     @default(0)
+  jml_kambing Int     @default(0)
+  jml_ayam    Int     @default(0)
+  jml_kerbau  Int     @default(0)
+
+  // Sambungan ke tabel Wilayah
+  wilayah     Wilayah @relation(fields: [wilayah_id], references: [id])
+
+  // Cegah duplikat: 1 wilayah gak boleh punya 2 data populasi di tahun yg sama
+  @@unique([wilayah_id, tahun]) 
+  @@map("populasi")
+}
+
+// === TABEL 5: FASILITAS (Titik Marker) ===
+model Fasilitas {
+  id          String  @id @default(uuid())
+  wilayah_id  Int
+  nama_lokasi String
+  kategori    String  // Isi nanti: PUSKESWAN, RPH, PASAR, dll
+  latitude    Float   // Desimal untuk Y
+  longitude   Float   // Desimal untuk X
+  alamat      String?
+
+  // Sambungan ke tabel Wilayah
+  wilayah     Wilayah @relation(fields: [wilayah_id], references: [id])
+
+  @@map("fasilitas")
+}
