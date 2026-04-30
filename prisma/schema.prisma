@@ -7,7 +7,6 @@ datasource db {
   provider = "postgresql"
 }
 
-// ... (kode model User dan tabel lainnya di bawahnya biarkan sama persis)
 // === TABEL 1: USERS (Akses Admin) ===
 model User {
   id           String   @id @default(uuid())
@@ -17,7 +16,7 @@ model User {
   role         String   @default("ADMIN")
   createdAt    DateTime @default(now())
 
-  @@map("users") // Nama tabel di database nanti jadi "users" huruf kecil
+  @@map("users") 
 }
 
 // === TABEL 2: PENGATURAN WEB (Landing Page) ===
@@ -39,11 +38,10 @@ model Wilayah {
   id              Int     @id @default(autoincrement())
   nama_wilayah    String
   level           String  // Isi nanti: KABUPATEN atau KECAMATAN
-  parent_id       Int?    // Tanda "?" berarti boleh kosong (Null)
-  geojson_polygon Json?   // Tipe data JSON super penting untuk poligon Peta
+  parent_id       Int?
+  geojson_polygon Json?
   warna_area      String?
-
-  // Relasi ke tabel bawahnya
+  
   populasi        Populasi[]
   fasilitas       Fasilitas[]
 
@@ -82,4 +80,55 @@ model Fasilitas {
   wilayah     Wilayah @relation(fields: [wilayah_id], references: [id])
 
   @@map("fasilitas")
+}
+
+// ==========================================
+// ⬇️ TABEL BARU UNTUK CMS TAMPILAN DEPAN ⬇️
+// ==========================================
+
+// === TABEL 6: LOGO ===
+model Logo {
+  id          Int      @id @default(autoincrement())
+  image_url   String   @db.VarChar(255)
+  name        String   @db.VarChar(100)
+  is_active   Boolean  @default(false)
+  uploaded_at DateTime @default(now())
+
+  @@map("logo")
+}
+
+// === TABEL 7: NAVBAR MENUS ===
+model NavbarMenu {
+  id          Int          @id @default(autoincrement())
+  title       String       @db.VarChar(100)
+  url         String       @db.VarChar(255)
+  parent_id   Int?         // Nullable untuk menu utama
+  order_index Int          @default(0)
+
+  // Relasi ke diri sendiri (Self-relation) untuk sub-menu
+  parent      NavbarMenu?  @relation("MenuToSubmenu", fields: [parent_id], references: [id])
+  children    NavbarMenu[] @relation("MenuToSubmenu")
+
+  @@map("navbar_menus")
+}
+
+// === TABEL 8: HERO CONTENTS ===
+model HeroContent {
+  id          Int      @id @default(autoincrement())
+  main_title  String   @db.VarChar(255)
+  description String   @db.Text
+  is_active   Boolean  @default(false)
+  updated_at  DateTime @updatedAt // Otomatis update waktu tiap kali diubah
+
+  @@map("hero_contents")
+}
+
+// === TABEL 9: HERO STATS ===
+model HeroStat {
+  id          Int      @id @default(autoincrement())
+  stat_value  String   @db.VarChar(50)
+  stat_label  String   @db.VarChar(100)
+  order_index Int      @default(0)
+
+  @@map("hero_stats")
 }
