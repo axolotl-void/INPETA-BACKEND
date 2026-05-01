@@ -132,3 +132,34 @@ model HeroStat {
 
   @@map("hero_stats")
 }
+
+// === TABEL 10: TENTANG CONTENT ===
+model TentangContent {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String   @db.Text
+  image_url   String?
+  is_active   Boolean  @default(false)
+
+  @@map("tentang_contents")
+}
+
+// === TABEL 11: TENTANG POINTS ===
+model TentangPoint {
+  id    Int     @id @default(autoincrement())
+  text  String
+  url   String?
+
+  @@map("tentang_points")
+}
+
+// === TABEL 12: FITUR UNGGULAN ===
+model FiturUnggulan {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String   @db.Text
+  icon_url    String
+  url         String?
+
+  @@map("fitur_unggulan")
+}
