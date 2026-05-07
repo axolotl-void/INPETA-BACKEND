@@ -14,7 +14,11 @@ model User {
   password     String
   nama_lengkap String
   role         String   @default("ADMIN")
+  avatar_url   String?
+  is_active    Boolean  @default(true)
+  dark_mode    Boolean  @default(false)
   createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
 
   @@map("users") 
 }
@@ -68,13 +72,14 @@ model Populasi {
 
 // === TABEL 5: FASILITAS (Titik Marker) ===
 model Fasilitas {
-  id          String  @id @default(uuid())
+  id          String   @id @default(uuid())
   wilayah_id  Int
   nama_lokasi String
-  kategori    String  // Isi nanti: PUSKESWAN, RPH, PASAR, dll
-  latitude    Float   // Desimal untuk Y
-  longitude   Float   // Desimal untuk X
-  alamat      String?
+  kategori    String   // Isi nanti: PUSKESWAN, PASAR, KOORDINAT
+  latitude    Float    // Desimal untuk Y
+  longitude   Float    // Desimal untuk X
+  alamat      String?  @db.Text
+  created_at  DateTime @default(now())
 
   // Sambungan ke tabel Wilayah
   wilayah     Wilayah @relation(fields: [wilayah_id], references: [id])
@@ -162,4 +167,45 @@ model FiturUnggulan {
   url         String?
 
   @@map("fitur_unggulan")
+}
+
+// === TABEL 13: FAQ (Pertanyaan Umum) ===
+model Faq {
+  id        Int      @id @default(autoincrement())
+  question  String   @db.Text
+  answer    String   @db.Text
+  is_active Boolean  @default(true)
+
+  @@map("faqs")
+}
+
+// === TABEL 14: BERITA & PUBLIKASI ===
+model Berita {
+  id           Int      @id @default(autoincrement())
+  title        String
+  summary      String   @db.Text
+  image_url    String
+  source_url   String
+  published_at DateTime @default(now())
+  is_active    Boolean  @default(true)
+
+  @@map("berita")
+}
+
+// === TABEL 15: FOOTER CONFIG ===
+model FooterConfig {
+  id             Int      @id @default(autoincrement())
+  logo_url       String
+  description    String   @db.Text
+  alamat         String
+  email          String
+  telepon        String
+  copyright      String
+  facebook_url   String?
+  instagram_url  String?
+  twitter_url    String?
+  youtube_url    String?
+  is_active      Boolean  @default(false)
+
+  @@map("footer_configs")
 }
