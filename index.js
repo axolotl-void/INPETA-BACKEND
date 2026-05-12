@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import cors from "cors";
 import dotenv from "dotenv";
 import bcrypt from "bcrypt";
@@ -1173,6 +1174,211 @@ app.delete("/api/admin/users/:id", authenticate, async (req, res) => {
 
     await prisma.user.delete({ where: { id } });
     res.json({ message: "Akun admin berhasil dihapus!" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================================
+// 📍 API KEY MANAGEMENT (Enterprise Feature)
+// ==========================================================
+
+// --- GENERATE NEW API KEY ---
+app.post("/api/admin/api-keys", authenticate, async (req, res) => {
+  try {
+    const { description } = req.body;
+    if (!description || !description.trim()) {
+      return res.status(400).json({ error: "Deskripsi API Key wajib diisi!" });
+    }
+
+    // Generate a secure 64-char hex key with 'inpeta_' prefix
+    const rawKey = crypto.randomBytes(32).toString("hex");
+    const apiKey = `inpeta_${rawKey}`;
+
+    const newKey = await prisma.apiKey.create({
+      data: {
+        key: apiKey,
+        description: description.trim(),
+        isActive: true,
+      },
+    });
+
+    res.json({ message: "API Key berhasil dibuat!", data: newKey });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- LIST ALL API KEYS ---
+app.get("/api/admin/api-keys", authenticate, async (req, res) => {
+  try {
+    const keys = await prisma.apiKey.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ data: keys });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- TOGGLE API KEY STATUS ---
+app.put("/api/admin/api-keys/:id/toggle", authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.apiKey.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: "API Key tidak ditemukan" });
+
+    const updated = await prisma.apiKey.update({
+      where: { id },
+      data: { isActive: !existing.isActive },
+    });
+    res.json({
+      message: `API Key berhasil ${updated.isActive ? "diaktifkan" : "dinonaktifkan"}!`,
+      data: updated,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- DELETE API KEY ---
+app.delete("/api/admin/api-keys/:id", authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.apiKey.delete({ where: { id } });
+    res.json({ message: "API Key berhasil dihapus!" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================================
+// 📍 MIDDLEWARE: VERIFIKASI API KEY (untuk akses publik data)
+// ==========================================================
+const verifyApiKey = async (req, res, next) => {
+  try {
+    const apiKeyHeader = req.headers["x-api-key"];
+    if (!apiKeyHeader) {
+      return res.status(401).json({ error: "API Key diperlukan. Sertakan header x-api-key." });
+    }
+
+    const keyRecord = await prisma.apiKey.findUnique({
+      where: { key: apiKeyHeader },
+    });
+
+    if (!keyRecord || !keyRecord.isActive) {
+      return res.status(403).json({ error: "API Key tidak valid atau sudah dinonaktifkan." });
+    }
+
+    req.apiKeyId = keyRecord.id;
+    next();
+  } catch (error) {
+    res.status(500).json({ error: "Gagal memverifikasi API Key." });
+  }
+};
+
+// --- PUBLIC DATA ROUTES (Protected by API Key) ---
+app.get("/api/public/fasilitas", verifyApiKey, async (req, res) => {
+  try {
+    const data = await prisma.fasilitas.findMany({
+      include: { wilayah: { select: { id: true, nama_wilayah: true } } },
+      orderBy: { created_at: "desc" },
+    });
+    res.json({ data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/public/populasi", verifyApiKey, async (req, res) => {
+  try {
+    const data = await prisma.populasi.findMany({
+      include: { wilayah: { select: { id: true, nama_wilayah: true } } },
+    });
+    res.json({ data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================================
+// 📍 CSV EXPORT ENDPOINTS (Admin Feature)
+// ==========================================================
+
+// Helper: Convert array of objects to CSV string
+function jsonToCsv(data, columns) {
+  if (!data || data.length === 0) return "";
+
+  const header = columns.map((c) => `"${c.label}"`).join(",");
+  const rows = data.map((row) =>
+    columns
+      .map((c) => {
+        let val = c.accessor(row);
+        if (val === null || val === undefined) val = "";
+        // Escape double quotes in CSV values
+        val = String(val).replace(/"/g, '""');
+        return `"${val}"`;
+      })
+      .join(",")
+  );
+
+  return [header, ...rows].join("\n");
+}
+
+// --- EXPORT FASILITAS CSV ---
+app.get("/api/export-fasilitas", authenticate, async (req, res) => {
+  try {
+    const data = await prisma.fasilitas.findMany({
+      include: { wilayah: { select: { nama_wilayah: true } } },
+      orderBy: { created_at: "desc" },
+    });
+
+    const columns = [
+      { label: "ID", accessor: (r) => r.id },
+      { label: "Nama Lokasi", accessor: (r) => r.nama_lokasi },
+      { label: "Kategori", accessor: (r) => r.kategori },
+      { label: "Latitude", accessor: (r) => r.latitude },
+      { label: "Longitude", accessor: (r) => r.longitude },
+      { label: "Alamat", accessor: (r) => r.alamat },
+      { label: "Wilayah", accessor: (r) => r.wilayah?.nama_wilayah },
+      { label: "Dibuat Pada", accessor: (r) => r.created_at?.toISOString() },
+    ];
+
+    const csv = jsonToCsv(data, columns);
+    const filename = `fasilitas_inpeta_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    // Add BOM for Excel UTF-8 compatibility
+    res.send("\uFEFF" + csv);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- EXPORT POPULASI CSV ---
+app.get("/api/export-populasi", authenticate, async (req, res) => {
+  try {
+    const data = await prisma.populasi.findMany({
+      include: { wilayah: { select: { nama_wilayah: true } } },
+    });
+
+    const columns = [
+      { label: "ID", accessor: (r) => r.id },
+      { label: "Wilayah", accessor: (r) => r.wilayah?.nama_wilayah },
+      { label: "Tahun", accessor: (r) => r.tahun },
+      { label: "Jumlah Sapi", accessor: (r) => r.jml_sapi },
+      { label: "Jumlah Kambing", accessor: (r) => r.jml_kambing },
+      { label: "Jumlah Ayam", accessor: (r) => r.jml_ayam },
+      { label: "Jumlah Kerbau", accessor: (r) => r.jml_kerbau },
+    ];
+
+    const csv = jsonToCsv(data, columns);
+    const filename = `populasi_inpeta_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send("\uFEFF" + csv);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -209,3 +209,14 @@ model FooterConfig {
 
   @@map("footer_configs")
 }
+
+// === TABEL 16: API KEYS (Akses Data Eksternal) ===
+model ApiKey {
+  id          String   @id @default(uuid())
+  key         String   @unique @db.VarChar(255)
+  description String   @db.VarChar(255)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("api_keys")
+}
